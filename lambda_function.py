@@ -1,22 +1,45 @@
-import re
-from urllib.request import urlopen
-import bs4 as bs
+from confluent_kafka import Consumer , KafkaException, KafkaError
+import os , sys
+from scrap import ScrapArticle
 
+def lambda_handler():
+    topics = os.environ['CLOUDKARAFKA_TOPIC'].split(",")
+    conf = {
+        'bootstrap.servers': os.environ['CLOUDKARAFKA_BROKERS'],
+        'group.id': "%s-consumer" % os.environ['CLOUDKARAFKA_USERNAME'],
+        'session.timeout.ms': 6000,
+        'default.topic.config': {'auto.offset.reset': 'smallest'},
+        'security.protocol': 'SASL_SSL',
+        'sasl.mechanisms': 'SCRAM-SHA-256',
+        'sasl.username': os.environ['CLOUDKARAFKA_USERNAME'],
+        'sasl.password': os.environ['CLOUDKARAFKA_PASSWORD']
+    }
 
-
-def lambda_handler(event,context):
-    url = event['url']
-    html_data = urlopen(url).read()
-    soup_data = bs.BeautifulSoup(html_data, 'html.parser')
-    nav = soup_data.nav
-    for nav_url in nav.find_all('a', text='environmental'):
-        category_data = urlopen(nav_url.get('href')).read()
-        category_soup_data = bs.BeautifulSoup(category_data, 'html.parser')
-        for div in category_soup_data.find_all('div', string=re.compile('epidemic|corona virus', re.IGNORECASE)):
-            for article_link in div.find_all('a'):
-                article_data = urlopen(url + article_link.get('href')).read()
-                article_soup_data = bs.BeautifulSoup(article_data, 'html.parser')
-                article_url = url + article_link.get('href')
-                ### we can save this variable into s3 bucket or else into
-                return article_soup_data.title , article_url , article_soup_data.element_classes
-
+    c = Consumer(**conf)
+    c.subscribe(topics)
+    try:
+        while True:
+            msg = c.poll(timeout=1.0)
+            if msg is None:
+                continue
+            if msg.error():
+                # Error or event
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    # End of partition event
+                    sys.stderr.write('%% %s [%d] reached end at offset %d\n' %
+                                     (msg.topic(), msg.partition(), msg.offset()))
+                elif msg.error():
+                    # Error
+                    raise KafkaException(msg.error())
+            else:
+                # Proper message
+                sys.stderr.write('%% %s [%d] at offset %d with key %s:\n' %
+                                 (msg.topic(), msg.partition(), msg.offset(),
+                                  str(msg.key())))
+                url = msg.value()
+                if url is not None:
+                    url = url.decode("utf-8")
+                    ScrapArticle.scrap(url)
+    except KeyboardInterrupt:
+        sys.stderr.write('%% Aborted by user\n')
+    c.close()
