@@ -10,3 +10,6 @@ zip -r ../lambda-kafka.zip .
 cd ..
 
 zip -g lambda-kafka.zip lambda_function.py
+
+
+## Upload lambda-kafka.zip into AWS lambda function
