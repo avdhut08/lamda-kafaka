@@ -1,6 +1,5 @@
 venv/
 secret.env
 consumer.py
-producer.py
 __pycache__/
 .idea/
