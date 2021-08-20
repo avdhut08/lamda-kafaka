@@ -10,3 +10,4 @@ zip -r ../lambda-kafka.zip .
 cd ..
 
 zip -g lambda-kafka.zip lambda_function.py
+zip -g lambda-kafka.zip scrap.py
