@@ -3,8 +3,10 @@
 
 ## Zip of package folder
 cd package
+
 zip -r ../lambda-kafka.zip .
 
 ## Add lambda_function file
 cd ..
+
 zip -g lambda-kafka.zip lambda_function.py
